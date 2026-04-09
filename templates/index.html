@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Comparison Tool</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0e14; --bg2: #0f1520; --bg3: #141e2e;
+    --teal: #00c8c8; --teal-glow: rgba(0,200,200,0.15);
+    --teal-dim: rgba(0,200,200,0.06); --border: rgba(0,200,200,0.25);
+    --border2: rgba(0,200,200,0.08); --text: #e0f0f0;
+    --text-dim: #6a8f8f; --green: #00e676; --red: #ff5252; --orange: #ff9800;
+  }
+  body {
+    min-height: 100vh; background: var(--bg);
+    background-image: radial-gradient(ellipse at 20% 20%, rgba(0,200,200,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,150,200,0.03) 0%, transparent 60%);
+    font-family: 'Exo 2', sans-serif; color: var(--text);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px 60px;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,200,200,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,200,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+  .container { width: 100%; max-width: 700px; position: relative; z-index: 1; }
+  /* Header */
+  .header { text-align: center; margin-bottom: 36px; animation: fadeDown 0.7s ease both; }
+  .header-icon { font-size: 3rem; display: block; margin-bottom: 10px; filter: drop-shadow(0 0 20px var(--teal)); }
+  .header h1 { font-family: 'Rajdhani', sans-serif; font-size: 2.6rem; font-weight: 700; color: var(--teal);
+    text-shadow: 0 0 30px rgba(0,200,200,0.5); letter-spacing: 3px; text-transform: uppercase; }
+  .header p { color: var(--text-dim); font-size: 0.88rem; letter-spacing: 1px; margin-top: 6px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 4px; margin-bottom: 26px; animation: fadeUp 0.6s ease 0.1s both; }
+  .tab-btn { flex: 1; padding: 11px 6px; border: none; border-radius: 10px;
+    background: transparent; color: var(--text-dim); font-family: 'Exo 2', sans-serif;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.3s;
+    text-align: center; line-height: 1.3; }
+  .tab-btn.active { background: var(--teal); color: #0a0e14; box-shadow: 0 0 20px rgba(0,200,200,0.4); }
+  .tab-btn:not(.active):hover { background: var(--teal-dim); color: var(--teal); }
+  .tab-num { display: block; font-size: 0.62rem; opacity: 0.7; font-family: 'Share Tech Mono', monospace; margin-bottom: 2px; }
+
+  /* Card */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px;
+    position: relative; overflow: hidden; animation: fadeUp 0.6s ease 0.2s both;
+    box-shadow: 0 0 40px rgba(0,200,200,0.04), inset 0 1px 0 rgba(0,200,200,0.1); }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--teal), transparent); opacity: 0.5; }
+
+  /* Drop zone single */
+  .drop-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 26px 20px;
+    text-align: center; cursor: pointer; transition: all 0.3s; background: var(--teal-dim);
+    position: relative; margin-bottom: 10px; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--teal); background: var(--teal-glow); box-shadow: 0 0 20px rgba(0,200,200,0.1); }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 1.8rem; display: block; margin-bottom: 6px; opacity: 0.7; }
+  .drop-text { color: var(--text); font-weight: 600; font-size: 0.95rem; }
+  .drop-zone.has-file { border-color: var(--teal); background: rgba(0,200,200,0.08); }
+  .drop-zone.has-file .drop-text { color: var(--teal); }
+
+  /* File status */
+  .file-status { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px;
+    margin-bottom: 14px; font-size: 0.82rem; color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace; }
+  .file-status.selected { color: var(--teal); border-color: rgba(0,200,200,0.2); }
+
+  /* Section label */
+  .section-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 2px; margin-bottom: 10px; font-weight: 600; }
+
+  /* Buttons */
+  .btn-choose { width: 100%; padding: 13px; border-radius: 10px; border: 1px solid var(--teal);
+    background: var(--teal-dim); color: var(--teal); font-family: 'Exo 2', sans-serif;
+    font-size: 0.92rem; font-weight: 600; cursor: pointer; letter-spacing: 1px;
+    transition: all 0.3s; margin-bottom: 18px; position: relative; overflow: hidden; }
+  .btn-choose::before { content: ''; position: absolute; inset: 0; background: var(--teal);
+    transform: scaleX(0); transform-origin: left; transition: transform 0.3s; z-index: 0; }
+  .btn-choose:hover::before { transform: scaleX(1); }
+  .btn-choose:hover { color: #0a0e14; box-shadow: 0 0 20px rgba(0,200,200,0.3); }
+  .btn-choose span { position: relative; z-index: 1; }
+
+  .btn-compare { width: 100%; padding: 15px; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, var(--teal) 0%, #009999 100%); color: #0a0e14;
+    font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase; cursor: pointer; transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(0,200,200,0.3); }
+  .btn-compare:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,200,200,0.5); }
+  .btn-compare:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-compare.loading .btn-text { display: none; }
+  .btn-compare .btn-loading { display: none; }
+  .btn-compare.loading .btn-loading { display: inline; }
+
+  .spinner { display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(10,14,20,0.3); border-top-color: #0a0e14;
+    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+
+  /* Multi drop */
+  .multi-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 36px 20px;
+    text-align: center; cursor: pointer; background: var(--teal-dim);
+    margin-bottom: 12px; transition: all 0.3s; position: relative; }
+  .multi-drop:hover, .multi-drop.drag-over { border-color: var(--teal); background: var(--teal-glow); }
+  .multi-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  .multi-file-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 4px; }
+  .file-tag { background: rgba(0,200,200,0.1); border: 1px solid rgba(0,200,200,0.3);
+    color: var(--teal); padding: 4px 10px; border-radius: 20px;
+    font-size: 0.78rem; font-family: 'Share Tech Mono', monospace;
+    display: flex; align-items: center; gap: 5px; }
+  .file-tag button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; }
+  .file-tag button:hover { color: var(--red); }
+
+  /* Pair preview */
+  .pair-preview-wrap { margin-bottom: 18px; }
+  .pair-row { display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+    background: rgba(0,200,200,0.06); border: 1px solid rgba(0,200,200,0.18);
+    border-radius: 8px; margin-bottom: 7px; font-size: 0.8rem; }
+  .pair-row .pname { font-family: 'Share Tech Mono', monospace; color: var(--teal);
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pair-arrow { color: var(--text-dim); font-size: 1rem; flex-shrink: 0; }
+  .pair-badge { background: rgba(0,200,200,0.15); color: var(--teal); font-size: 0.68rem;
+    padding: 2px 7px; border-radius: 20px; flex-shrink: 0; font-weight: 700; }
+
+  .unmatched-box { background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.35);
+    border-radius: 8px; padding: 11px 14px; font-size: 0.8rem; color: #ffb74d; }
+  .unmatched-box strong { color: var(--orange); display: block; margin-bottom: 4px; }
+
+  /* Results */
+  .results-section { margin-top: 24px; animation: fadeUp 0.5s ease both; }
+  .result-card { background: var(--bg2); border: 1px solid rgba(0,200,200,0.3);
+    border-radius: 16px; padding: 26px; box-shadow: 0 0 40px rgba(0,200,200,0.08); }
+  .result-card::before { content: ''; display: block; height: 1px;
+    background: linear-gradient(90deg, var(--teal), transparent); margin-bottom: 18px; opacity: 0.6; }
+  .result-title { font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; font-weight: 700;
+    color: var(--teal); letter-spacing: 2px; margin-bottom: 18px; text-transform: uppercase; }
+
+  .stats-mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .stat-mini { background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 12px 8px; text-align: center; }
+  .stat-mini .num { font-family: 'Rajdhani', sans-serif; font-size: 1.7rem; font-weight: 700; display: block; line-height: 1; margin-bottom: 3px; }
+  .stat-mini .lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .c-teal{color:var(--teal)} .c-orange{color:var(--orange)} .c-red{color:var(--red)}
+  .c-green{color:var(--green)} .c-yellow{color:#ffeb3b} .c-purple{color:#ce93d8}
+
+  .pairs-result-list { margin-bottom: 14px; }
+  .pritem { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    border-left: 3px solid var(--teal); background: rgba(0,200,200,0.04);
+    border-radius: 0 6px 6px 0; margin-bottom: 5px;
+    font-size: 0.78rem; font-family: 'Share Tech Mono', monospace; color: var(--text-dim); }
+  .pritem span { color: var(--teal); }
+
+  .action-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn-action { padding: 13px 16px; border-radius: 10px; border: 1px solid;
+    font-family: 'Exo 2', sans-serif; font-size: 0.88rem; font-weight: 600;
+    cursor: pointer; transition: all 0.3s; letter-spacing: 0.5px;
+    display: flex; align-items: center; justify-content: center; gap: 7px; }
+  .btn-csv  { background: rgba(0,230,118,0.08); border-color: var(--green); color: var(--green); }
+  .btn-csv:hover  { background: var(--green);  color: #0a0e14; box-shadow: 0 0 20px rgba(0,230,118,0.3); transform: translateY(-2px); }
+  .btn-html { background: rgba(0,200,200,0.08); border-color: var(--teal);  color: var(--teal);  }
+  .btn-html:hover { background: var(--teal);   color: #0a0e14; box-shadow: 0 0 20px rgba(0,200,200,0.3); transform: translateY(-2px); }
+
+  .error-msg { background: rgba(255,82,82,0.1); border: 1px solid rgba(255,82,82,0.4);
+    border-radius: 10px; padding: 12px 16px; color: #ff8080; font-size: 0.85rem; margin-top: 14px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .footer { margin-top: 48px; color: var(--text-dim); font-size: 0.78rem; text-align: center; z-index: 1; position: relative; letter-spacing: 1px; }
+
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(20px);  } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin     { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="header-icon"></span>
+    <h1>PDF Comparison Tool</h1>
+    <p>Line-by-line &amp; character-level PDF comparison with detailed reports</p>
+  </div>
+
+  <!-- 3 Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('two')">
+      <span class="tab-num">01</span>Two PDF Compare
+    </button>
+    <button class="tab-btn" onclick="switchTab('nm')">
+      <span class="tab-num">02</span>Name Match Compare
+    </button>
+    <button class="tab-btn" onclick="switchTab('all')">
+      <span class="tab-num">03</span>Compare All PDFs
+    </button>
+  </div>
+
+  <div class="tab-panel active" id="tab-two">
+    <div class="card">
+      <div class="section-label">PDF File 1 &mdash; Old / Reference</div>
+      <div class="drop-zone" id="zone1"
+           ondragover="onDragOver(event,'zone1')" ondragleave="onDragLeave('zone1')"
+           ondrop="onDrop(event,'pdf1Input','status1','zone1')">
+        <input type="file" id="pdf1Input" accept=".pdf" onchange="onFileSelect(this,'status1','zone1')">
+        <span class="drop-icon">&#128196;</span>
+        <span class="drop-text">Drag &amp; Drop PDF 1 here</span>
+      </div>
+      <div class="file-status" id="status1"><span>&#128193;</span><span>No file selected</span></div>
+      <button class="btn-choose" onclick="document.getElementById('pdf1Input').click()"><span>Choose PDF 1</span></button>
+
+      <div class="section-label">PDF File 2 &mdash; New / Comparison</div>
+      <div class="drop-zone" id="zone2"
+           ondragover="onDragOver(event,'zone2')" ondragleave="onDragLeave('zone2')"
+           ondrop="onDrop(event,'pdf2Input','status2','zone2')">
+        <input type="file" id="pdf2Input" accept=".pdf" onchange="onFileSelect(this,'status2','zone2')">
+        <span class="drop-icon">&#128196;</span>
+        <span class="drop-text">Drag &amp; Drop PDF 2 here</span>
+      </div>
+      <div class="file-status" id="status2"><span>&#128193;</span><span>No file selected</span></div>
+      <button class="btn-choose" onclick="document.getElementById('pdf2Input').click()"><span>Choose PDF 2</span></button>
+
+      <button class="btn-compare" id="compareBtn" onclick="compareTwoPDFs()" disabled>
+        <span class="btn-text">Compare PDFs</span>
+        <span class="btn-loading"><span class="spinner"></span>Analyzing...</span>
+      </button>
+      <div id="errorTwo" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="results-section" id="resultsTwo" style="display:none">
+      <div class="result-card">
+        <div class="result-title">&#10003; Comparison Complete</div>
+        <div class="stats-mini" id="statsTwo"></div>
+        <div class="action-btns">
+          <button class="btn-action btn-csv"  onclick="doDownload('two')">&#8595; Download CSV</button>
+          <button class="btn-action btn-html" onclick="doOpenHTML('two')">&#128202; Show HTML Report</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tab-panel" id="tab-nm">
+    <div class="card">
+      <div class="section-label">Upload PDFs &mdash; pairs matched by file name</div>
+      <div class="multi-drop" id="nmZone"
+           ondragover="onDragOver(event,'nmZone')" ondragleave="onDragLeave('nmZone')"
+           ondrop="onMultiDrop(event,'nm')">
+        <input type="file" id="nmInput" accept=".pdf" multiple onchange="onMultiSelect(this,'nm')">
+        <span style="font-size:2.2rem;display:block;margin-bottom:8px;opacity:0.7">&#128194;</span>
+        <div class="drop-text">Drag &amp; Drop Multiple PDFs here</div>
+        <div style="color:var(--text-dim);font-size:0.78rem;margin-top:8px">
+        </div>
+      </div>
+      <div class="multi-file-list" id="nmFileList"></div>
+      <button class="btn-choose" onclick="document.getElementById('nmInput').click()"><span>Choose PDFs</span></button>
+
+      <div id="nmPreview" class="pair-preview-wrap" style="display:none">
+        <div class="section-label">&#128279; Auto-detected pairs (name-based)</div>
+        <div id="nmPairList"></div>
+        <div id="nmUnmatched" class="unmatched-box" style="display:none;margin-top:10px"></div>
+      </div>
+
+      <button class="btn-compare" id="compareNmBtn" onclick="compareNameMatch()" disabled>
+        <span class="btn-text">Compare Matched Pairs</span>
+        <span class="btn-loading"><span class="spinner"></span>Analyzing...</span>
+      </button>
+      <div id="errorNm" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="results-section" id="resultsNm" style="display:none">
+      <div class="result-card">
+        <div class="result-title">&#10003; Comparison Complete</div>
+        <div class="stats-mini" id="statsNm"></div>
+        <div id="nmPairsResult" class="pairs-result-list"></div>
+        <div id="nmUnmatchedResult" class="unmatched-box" style="display:none;margin-bottom:14px"></div>
+        <div class="action-btns">
+          <button class="btn-action btn-csv"  onclick="doDownload('nm')">&#8595; Download CSV</button>
+          <button class="btn-action btn-html" onclick="doOpenHTML('nm')">&#128202; Show HTML Report</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tab-panel" id="tab-all">
+    <div class="card">
+      <div class="section-label">Upload PDFs &mdash; every PDF compared with every other</div>
+      <div class="multi-drop" id="allZone"
+           ondragover="onDragOver(event,'allZone')" ondragleave="onDragLeave('allZone')"
+           ondrop="onMultiDrop(event,'all')">
+        <input type="file" id="allInput" accept=".pdf" multiple onchange="onMultiSelect(this,'all')">
+        <span style="font-size:2.2rem;display:block;margin-bottom:8px;opacity:0.7">&#128194;</span>
+        <div class="drop-text">Drag &amp; Drop Multiple PDFs here</div>
+        <div style="color:var(--text-dim);font-size:0.78rem;margin-top:8px">
+          4 PDFs &#8594; 6 pairs &nbsp;|&nbsp; 5 PDFs &#8594; 10 pairs &nbsp;|&nbsp; Every PDF vs every other
+        </div>
+      </div>
+      <div class="multi-file-list" id="allFileList"></div>
+      <button class="btn-choose" onclick="document.getElementById('allInput').click()"><span>Choose PDFs</span></button>
+
+      <div id="allPreview" class="pair-preview-wrap" style="display:none">
+        <div class="section-label">&#128279; All pairs that will be compared</div>
+        <div id="allPairList"></div>
+      </div>
+
+      <button class="btn-compare" id="compareAllBtn" onclick="compareAll()" disabled>
+        <span class="btn-text">Compare All PDFs</span>
+        <span class="btn-loading"><span class="spinner"></span>Analyzing...</span>
+      </button>
+      <div id="errorAll" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="results-section" id="resultsAll" style="display:none">
+      <div class="result-card">
+        <div class="result-title">&#10003; Comparison Complete</div>
+        <div class="stats-mini" id="statsAll"></div>
+        <div id="allPairsResult" class="pairs-result-list"></div>
+        <div class="action-btns">
+          <button class="btn-action btn-csv"  onclick="doDownload('all')">&#8595; Download CSV</button>
+          <button class="btn-action btn-html" onclick="doOpenHTML('all')">&#128202; Show HTML Report</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+<div class="footer">&#169; 2026 &nbsp;|&nbsp; Developed by Atul Raj &nbsp;|&nbsp; PDF Comparison Tool</div>
+
+<script>
+function switchTab(tab) {
+  ['two','nm','all'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['two','nm','all'][i] === tab);
+  });
+}
+function onDragOver(e, id) { e.preventDefault(); document.getElementById(id).classList.add('drag-over'); }
+function onDragLeave(id)   { document.getElementById(id).classList.remove('drag-over'); }
+function onDrop(e, inputId, statusId, zoneId) {
+  e.preventDefault();
+  document.getElementById(zoneId).classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') {
+    const dt = new DataTransfer(); dt.items.add(file);
+    document.getElementById(inputId).files = dt.files;
+    setStatus(statusId, file.name, zoneId);
+    checkTwoReady();
+  }
+}
+function onFileSelect(input, statusId, zoneId) {
+  if (input.files[0]) { setStatus(statusId, input.files[0].name, zoneId); checkTwoReady(); }
+}
+function setStatus(statusId, name, zoneId) {
+  const el = document.getElementById(statusId);
+  el.classList.add('selected');
+  el.innerHTML = '<span>&#10003;</span><span>' + esc(name) + '</span>';
+  const z = document.getElementById(zoneId);
+  z.classList.add('has-file');
+  z.querySelector('.drop-text').textContent = name;
+}
+function checkTwoReady() {
+  document.getElementById('compareBtn').disabled =
+    !(document.getElementById('pdf1Input').files[0] && document.getElementById('pdf2Input').files[0]);
+}
+function showErr(id, msg) { const el = document.getElementById(id); el.textContent = '⚠ ' + msg; el.style.display = 'block'; }
+function hideErr(id)       { document.getElementById(id).style.display = 'none'; }
+const sessions = { two: null, nm: null, all: null };
+async function compareTwoPDFs() {
+  hideErr('errorTwo');
+  const f1 = document.getElementById('pdf1Input').files[0];
+  const f2 = document.getElementById('pdf2Input').files[0];
+  if (!f1 || !f2) { showErr('errorTwo', 'Please select both PDFs.'); return; }
+  const btn = document.getElementById('compareBtn');
+  btn.classList.add('loading'); btn.disabled = true;
+  const fd = new FormData(); fd.append('pdf1', f1); fd.append('pdf2', f2);
+  try {
+    const res  = await fetch('/compare_two', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { showErr('errorTwo', data.error); return; }
+    sessions.two = data.summary.session_id;
+    document.getElementById('statsTwo').innerHTML = buildStats([
+      { n: data.summary.total_pages,       l: 'Total Pages',    c: 'c-teal'   },
+      { n: data.summary.pages_with_diffs,  l: 'Pages w/ Diffs', c: 'c-orange' },
+      { n: data.summary.total_differences, l: 'Total Diffs',    c: 'c-teal'   },
+      { n: data.summary.modified_lines,    l: 'Modified Lines', c: 'c-yellow' },
+      { n: data.summary.only_in_pdf_a,     l: 'Only in PDF A',  c: 'c-red'    },
+      { n: data.summary.only_in_pdf_b,     l: 'Only in PDF B',  c: 'c-green'  },
+    ]);
+    showEl('resultsTwo');
+  } catch(e) { showErr('errorTwo', 'Server error: ' + e.message); }
+  finally { btn.classList.remove('loading'); btn.disabled = false; }
+}
+const mFiles = { nm: [], all: [] };
+
+function onMultiDrop(e, mode) {
+  e.preventDefault();
+  document.getElementById(mode === 'nm' ? 'nmZone' : 'allZone').classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'), mode);
+}
+function onMultiSelect(input, mode) { addFiles(Array.from(input.files), mode); }
+
+function addFiles(files, mode) {
+  files.forEach(f => { if (!mFiles[mode].find(x => x.name === f.name)) mFiles[mode].push(f); });
+  renderTags(mode);
+  refreshPreview(mode);
+}
+function removeFile(name, mode) {
+  mFiles[mode] = mFiles[mode].filter(f => f.name !== name);
+  renderTags(mode);
+  refreshPreview(mode);
+}
+function renderTags(mode) {
+  document.getElementById(mode === 'nm' ? 'nmFileList' : 'allFileList').innerHTML =
+    mFiles[mode].map(f =>
+      '<div class="file-tag">&#128196; ' + esc(f.name) +
+      ' <button onclick="removeFile(\'' + f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "','" + mode + "')\">&times;</button></div>"
+    ).join('');
+  document.getElementById(mode === 'nm' ? 'compareNmBtn' : 'compareAllBtn').disabled = mFiles[mode].length < 2;
+}
+function refreshPreview(mode) {
+  if (mode === 'nm')  buildNmPreview();
+  if (mode === 'all') buildAllPreview();
+}
+async function buildNmPreview() {
+  const names = mFiles.nm.map(f => f.name);
+  if (names.length < 2) { document.getElementById('nmPreview').style.display = 'none'; return; }
+  try {
+    const res  = await fetch('/preview_pairs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_names: names })
+    });
+    const data = await res.json();
+    const pairs = data.pairs || [], unmatched = data.unmatched || [], baseMap = data.base_map || {};
+    const list  = document.getElementById('nmPairList');
+    const warn  = document.getElementById('nmUnmatched');
+
+    if (pairs.length === 0) {
+      list.innerHTML = '<div class="error-msg" style="margin:0;font-size:0.8rem">' +
+        '&#9888; No matching pairs found.<br>Detected base names:<br>' +
+        Object.entries(baseMap).map(([fn, base]) =>
+          '<code style="font-size:0.75rem">' + esc(fn) + '</code> &#8594; <b style="color:var(--teal)">' + esc(base||'(empty)') + '</b>'
+        ).join('<br>') +
+        '<br><br>Upload PDFs whose names share a common word — e.g. ' +
+        '<b>salary_old.pdf</b> &amp; <b>salary_new.pdf</b> both become <b>salary</b>.</div>';
+      document.getElementById('compareNmBtn').disabled = true;
+    } else {
+      list.innerHTML = pairs.map(p =>
+        '<div class="pair-row">' +
+        '<span class="pname">&#128196; ' + esc(p.a) + '</span>' +
+        '<span class="pair-arrow">&#8596;</span>' +
+        '<span class="pname">&#128196; ' + esc(p.b) + '</span>' +
+        '<span class="pair-badge">' + esc(p.base_a || baseMap[p.a] || '') + '</span>' +
+        '</div>'
+      ).join('');
+      document.getElementById('compareNmBtn').disabled = false;
+    }
+    if (unmatched.length) {
+      warn.style.display = 'block';
+      warn.innerHTML = '<strong>&#9888; No match found — will be skipped:</strong><br>' +
+        unmatched.map(u => {
+          const base = baseMap[u] || '';
+          return '<code style="font-size:0.78rem">' + esc(u) + '</code>' +
+            (base ? ' <span style="color:var(--text-dim);font-size:0.72rem">(base: ' + esc(base) + ')</span>' : '');
+        }).join(', ') +
+        '<br><span style="opacity:0.8;font-size:0.75rem">These have no similar-named partner. Upload a matching PDF to include them.</span>';
+    } else { warn.style.display = 'none'; }
+    document.getElementById('nmPreview').style.display = 'block';
+  } catch(e) { /* silent */ }
+}
+function buildAllPreview() {
+  const files = mFiles.all;
+  const panel = document.getElementById('allPreview');
+  if (files.length < 2) { panel.style.display = 'none'; return; }
+  let html = '';
+  for (let i = 0; i < files.length; i++)
+    for (let j = i + 1; j < files.length; j++)
+      html += '<div class="pair-row">' +
+        '<span class="pname">&#128196; ' + esc(files[i].name) + '</span>' +
+        '<span class="pair-arrow">&#8596;</span>' +
+        '<span class="pname">&#128196; ' + esc(files[j].name) + '</span>' +
+        '</div>';
+  document.getElementById('allPairList').innerHTML = html;
+  panel.style.display = 'block';
+}
+async function compareNameMatch() {
+  hideErr('errorNm');
+  if (mFiles.nm.length < 2) { showErr('errorNm', 'Please select at least 2 PDFs.'); return; }
+  const btn = document.getElementById('compareNmBtn');
+  btn.classList.add('loading'); btn.disabled = true;
+  const fd = new FormData(); mFiles.nm.forEach(f => fd.append('pdfs', f));
+  try {
+    const res  = await fetch('/compare_multiple', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { showErr('errorNm', data.error); return; }
+    sessions.nm = data.summary.session_id;
+    renderMultiResults('nm', data.summary);
+  } catch(e) { showErr('errorNm', 'Server error: ' + e.message); }
+  finally { btn.classList.remove('loading'); btn.disabled = false; }
+}
+async function compareAll() {
+  hideErr('errorAll');
+  if (mFiles.all.length < 2) { showErr('errorAll', 'Please select at least 2 PDFs.'); return; }
+  const btn = document.getElementById('compareAllBtn');
+  btn.classList.add('loading'); btn.disabled = true;
+  const fd = new FormData(); mFiles.all.forEach(f => fd.append('pdfs', f));
+  try {
+    const res  = await fetch('/compare_all', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { showErr('errorAll', data.error); return; }
+    sessions.all = data.summary.session_id;
+    renderMultiResults('all', data.summary);
+  } catch(e) { showErr('errorAll', 'Server error: ' + e.message); }
+  finally { btn.classList.remove('loading'); btn.disabled = false; }
+}
+function renderMultiResults(mode, s) {
+  document.getElementById(mode === 'nm' ? 'statsNm' : 'statsAll').innerHTML = buildStats([
+    { n: s.files.length,      l: 'Files Uploaded',  c: 'c-teal'   },
+    { n: s.pairs_compared,    l: 'Pairs Compared',  c: 'c-orange' },
+    { n: s.total_differences, l: 'Total Diffs',     c: 'c-red'    },
+  ]);
+  const pairsId = mode === 'nm' ? 'nmPairsResult' : 'allPairsResult';
+  if (s.pairs && s.pairs.length) {
+    document.getElementById(pairsId).innerHTML =
+      '<div class="section-label" style="margin-bottom:8px">&#128279; Compared Pairs</div>' +
+      s.pairs.map(p =>
+        '<div class="pritem">' +
+        '<span>&#128196; ' + esc(p.a) + '</span>&nbsp;&#8596;&nbsp;<span>&#128196; ' + esc(p.b) + '</span>' +
+        (p.base ? ' <span style="background:rgba(0,200,200,0.15);color:var(--teal);font-size:0.68rem;padding:1px 6px;border-radius:10px;margin-left:6px">' + esc(p.base) + '</span>' : '') +
+        '</div>'
+      ).join('');
+  }
+  if (mode === 'nm') {
+    const uEl = document.getElementById('nmUnmatchedResult');
+    if (s.unmatched && s.unmatched.length) {
+      uEl.style.display = 'block';
+      uEl.innerHTML = '<strong>&#9888; Skipped (no match):</strong> ' + s.unmatched.map(esc).join(', ');
+    } else { uEl.style.display = 'none'; }
+  }
+
+  showEl(mode === 'nm' ? 'resultsNm' : 'resultsAll');
+}
+function doDownload(mode) { if (sessions[mode]) window.location.href = '/download_csv/' + sessions[mode]; }
+function doOpenHTML(mode)  { if (sessions[mode]) window.open('/view_html/' + sessions[mode], '_blank'); }
+function showEl(id) {
+  const el = document.getElementById(id); el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth' });
+}
+function buildStats(arr) {
+  return arr.map(s =>
+    '<div class="stat-mini"><span class="num ' + s.c + '">' + s.n + '</span><span class="lbl">' + s.l + '</span></div>'
+  ).join('');
+}
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function deriveBase(filename) {
+  let n = filename.replace(/\.pdf$/i, '').toLowerCase();
+  ['new','old','latest','original','final','draft','copy','backup',
+   'revised','updated','modified','version','ver','rev'].forEach(kw => {
+    n = n.replace(new RegExp('\\b' + kw + '\\b', 'g'), '');
+  });
+  n = n.replace(/v\d+/g, '').replace(/\d+/g, '').replace(/[\s_\-\.]+/g, ' ').trim();
+  return n || filename.replace(/\.pdf$/i, '');
+}
+</script>
+</body>
+</html>
